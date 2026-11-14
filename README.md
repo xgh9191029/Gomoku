@@ -1,7 +1,7 @@
 # ⚪⚫ 五子棋多房间在线对战平台
 使用gemini和deepseek许愿完成的项目
 基于 Python (`asyncio` + `websockets` + `SQLite`) 与原生前端 (`HTML5 Canvas` + `JavaScript`) 开发的多人在线五子棋对战系统。后端通过 `websockets` 的 HTTP 拦截功能实现了全栈一体化，单文件即可同时托管网页前端和 WebSocket 服务。
-在线试玩：hn.frp.one:31432
+在线试玩：(hn.frp.one:31432)
 ---
 
 ## 🌟 主要功能特性
