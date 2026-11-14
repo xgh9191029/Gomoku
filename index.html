@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>五子棋 · 多房间</title>
+    <style>
+        * { box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+        html, body {
+            margin: 0; padding: 0; min-height: 100%;
+            background: #1e3e34;
+            font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            display: flex; align-items: center; justify-content: center;
+            padding: 10px; min-height: 100vh;
+        }
+        .game-container {
+            max-width: 1000px; width: 100%;
+            background: #e8d5b5;
+            border-radius: 24px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            padding: 12px 12px 16px;
+            overflow: hidden;
+        }
+        .title-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; padding: 0 4px 8px;
+        }
+        .title { font-size: 1.2rem; font-weight: 800; color: #3b2a1a;
+                 display: flex; align-items: center; flex-wrap: wrap; }
+        .title > * { margin: 2px 4px; }
+        .conn-status { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+                       font-weight: 700; }
+        .conn-ok { background: #1e5a2e; color: #b9f6ca; }
+        .conn-bad { background: #5a1e1e; color: #ffb0a0; }
+        .conn-wait { background: #5a4a1e; color: #ffe082; }
+
+        .auth-area {
+            display: flex; align-items: center; flex-wrap: wrap;
+            background: #5c4b33; padding: 6px 10px; border-radius: 40px;
+        }
+        .auth-area > * { margin: 3px 4px; }
+        #currentUserLabel { color: #eedbba; font-weight: 700; font-size: 0.8rem; }
+
+        .btn {
+            border: none; border-radius: 30px; padding: 7px 16px;
+            font-weight: 700; font-size: 0.85rem; cursor: pointer;
+            background: #e6b422; color: #2d1f0e;
+            box-shadow: 0 3px 0 #8b6b1e;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            font-family: inherit;
+        }
+        .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #8b6b1e; }
+        .btn.secondary { background: #b6a68b; box-shadow: 0 3px 0 #6b5b46; color: #1f160c; }
+        .btn.danger { background: #a5584b; box-shadow: 0 3px 0 #632b22; color: #fff4e5; }
+        .btn.success { background: #4caf50; box-shadow: 0 3px 0 #2e7d32; color: #fff; }
+        .btn.small { padding: 4px 10px; font-size: 0.75rem; }
+        .btn:disabled { opacity: 0.5; pointer-events: none; }
+
+        .ws-bar {
+            display: flex; align-items: center; flex-wrap: wrap;
+            background: #3f2f1e; border-radius: 30px;
+            padding: 6px 10px; margin: 4px 0 8px;
+            color: #eedbba; font-weight: 600; font-size: 0.75rem;
+        }
+        .ws-bar > * { margin: 3px 4px; }
+        .ws-bar input {
+            flex: 1; min-width: 140px;
+            padding: 6px 10px; border-radius: 20px;
+            border: 2px solid #b39262; background: #fcf3e3;
+            font-weight: 600; color: #2d1f0e; outline: none;
+            font-size: 0.75rem; font-family: monospace;
+        }
+
+        .lobby {
+            background: #d8c4a2;
+            border-radius: 16px;
+            padding: 14px;
+            margin: 8px 0;
+        }
+        .lobby h3 { margin: 0 0 10px; color: #3b2a1a; font-size: 1.1rem; }
+        .lobby-row {
+            display: flex; align-items: center; flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .lobby-row > * { margin: 4px 6px 4px 0; }
+        .lobby-row input {
+            width: 100px; padding: 8px 12px; border-radius: 30px;
+            border: 2px solid #b39262; background: #fcf3e3;
+            font-weight: 700; color: #2d1f0e; outline: none;
+            font-size: 1rem; letter-spacing: 4px; text-align: center;
+        }
+        .room-list {
+            max-height: 200px; overflow-y: auto;
+            background: #f5e8d0; border-radius: 10px; padding: 6px;
+        }
+        .room-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 10px; border-radius: 8px;
+            background: #e8d5b5; margin: 3px 0;
+            font-size: 0.85rem; color: #3b2a1a;
+        }
+        .room-item .room-id {
+            font-weight: 800; color: #8b6b1e; font-family: monospace;
+            font-size: 1rem;
+        }
+        .empty-tip { color: #7a5c33; text-align: center; padding: 12px; font-size: 0.85rem; }
+
+        .room-view { display: none; }
+        .room-view.active { display: block; }
+        .lobby-view.active { display: block; }
+        .lobby-view { display: none; }
+
+        .room-info {
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; background: #2b1f12;
+            border-radius: 30px; padding: 6px 12px;
+            margin: 4px 0 8px; color: #eedbba; font-weight: 600;
+            font-size: 0.8rem;
+        }
+        .room-info > * { margin: 3px 4px; }
+        .room-id-badge {
+            background: #e6b422; color: #2d1f0e;
+            padding: 3px 10px; border-radius: 20px; font-weight: 800;
+            font-family: monospace;
+        }
+        .player-tag {
+            display: flex; align-items: center;
+            background: #3f2f1e; padding: 3px 10px; border-radius: 20px;
+            transition: all 0.3s;
+        }
+        .player-tag > * { margin: 0 3px; }
+        .black-dot, .white-dot {
+            width: 14px; height: 14px; border-radius: 50%;
+            box-shadow: 0 1px 2px black; display: inline-block;
+        }
+        .black-dot { background: #111; }
+        .white-dot { background: #fff; }
+
+        /* ★ 玩家胜负高亮 */
+        .player-tag.winner {
+            background: #4caf50;
+            color: #fff;
+            font-weight: 800;
+            box-shadow: 0 0 10px #4caf50, 0 0 20px #4caf50;
+            transform: scale(1.08);
+        }
+        .player-tag.loser {
+            opacity: 0.55;
+            background: #5a2a2a;
+        }
+
+        /* ★ 回合指示器状态色 */
+        .turn-indicator {
+            background: #f3e7d3; color: #2d1f0e;
+            padding: 4px 12px; border-radius: 20px; font-weight: 700;
+            font-size: 0.8rem;
+            transition: all 0.3s;
+        }
+        .turn-indicator.win {
+            background: #4caf50; color: #fff;
+            font-size: 0.95rem;
+            box-shadow: 0 0 12px #4caf50;
+            animation: pulseWin 1.2s infinite alternate;
+        }
+        .turn-indicator.lose {
+            background: #a5584b; color: #fff;
+            box-shadow: 0 0 8px #a5584b;
+        }
+        .turn-indicator.draw {
+            background: #7a5c33; color: #fff;
+        }
+        @keyframes pulseWin {
+            from { box-shadow: 0 0 6px #4caf50; }
+            to   { box-shadow: 0 0 20px #4caf50, 0 0 30px #4caf50; }
+        }
+
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+        }
+        .online { background: #4caf50; }
+        .offline { background: #f44336; }
+
+        .board-wrapper {
+            display: block; text-align: center; margin: 6px 0;
+            position: relative;
+        }
+        canvas {
+            display: block; margin: 0 auto;
+            width: 100%; max-width: 600px; height: auto;
+            border-radius: 16px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+            background: #e4cfaa;
+            cursor: pointer;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            transition: box-shadow 0.4s, filter 0.3s;
+        }
+        .board-wrapper.win-glow canvas {
+            box-shadow: 0 0 0 4px #4caf50, 0 0 30px #4caf50, 0 8px 16px rgba(0,0,0,0.5);
+        }
+        .board-wrapper.lose-glow canvas {
+            box-shadow: 0 0 0 4px #a5584b, 0 0 24px #a5584b, 0 8px 16px rgba(0,0,0,0.5);
+        }
+        .board-wrapper.draw-glow canvas {
+            box-shadow: 0 0 0 4px #7a5c33, 0 0 24px #7a5c33, 0 8px 16px rgba(0,0,0,0.5);
+        }
+        .game-result-banner {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.6);
+            opacity: 0;
+            pointer-events: none;
+            background: linear-gradient(135deg, #4caf50, #2e7d32);
+            color: #fff;
+            padding: 18px 40px;
+            border-radius: 20px;
+            font-size: 2rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 40px #4caf50;
+            border: 3px solid #fff;
+            transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 10;
+            white-space: nowrap;
+        }
+        .game-result-banner.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .game-result-banner.lose {
+            background: linear-gradient(135deg, #c62828, #8e0000);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 40px #c62828;
+        }
+        .game-result-banner.draw {
+            background: linear-gradient(135deg, #7a5c33, #4e3a1e);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 40px #7a5c33;
+        }
+        .game-result-banner .sub {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-top: 6px;
+            opacity: 0.95;
+        }
+        @media (max-width: 480px) {
+            .game-result-banner { font-size: 1.4rem; padding: 14px 24px; }
+            .game-result-banner .sub { font-size: 0.75rem; }
+        }
+
+        .action-bar {
+            display: flex; flex-wrap: wrap; justify-content: center;
+            align-items: center;
+            margin: 6px 0;
+        }
+        .action-bar > * { margin: 4px 4px; }
+        #swapHint {
+            font-size: 0.75rem; color: #7a5c33; font-weight: 700;
+            background: #fff5e0; padding: 4px 10px; border-radius: 20px;
+            display: none;
+        }
+        #swapHint.show { display: inline-block; }
+
+        .footer {
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; margin: 8px 0 0;
+            font-size: 0.8rem; color: #3b2a1a; font-weight: 600;
+        }
+        .footer > * { margin: 4px 0; }
+        .msg {
+            background: #2d1f0e; padding: 5px 12px; border-radius: 20px;
+            color: #ffdfa7; font-weight: 500; min-height: 28px;
+            display: flex; align-items: center; flex: 1;
+            margin-right: 6px; font-size: 0.75rem;
+            word-break: break-word;
+        }
+        .win-rate {
+            background: #00000055; padding: 5px 12px; border-radius: 20px;
+            font-size: 0.75rem; margin-right: 6px;
+        }
+
+        .chat-box { display: flex; align-items: center; margin: 6px 0 0; }
+        .chat-box > * { margin: 0 3px; }
+        .chat-box input {
+            flex: 1; padding: 6px 12px; border-radius: 20px;
+            border: 2px solid #b39262; background: #fcf3e3;
+            font-weight: 500; outline: none; font-size: 0.8rem;
+        }
+        .chat-log {
+            background: #2b1f12; border-radius: 12px; padding: 6px 10px;
+            margin: 6px 0 0; max-height: 70px; overflow-y: auto;
+            color: #eedbba; font-size: 0.75rem; line-height: 1.4;
+            -webkit-overflow-scrolling: touch;
+        }
+        .chat-log div { margin: 1px 0; }
+        .chat-log .name { color: #e6b422; font-weight: 700; }
+
+        .request-banner {
+            background: #e6b422; color: #2d1f0e;
+            border-radius: 12px; padding: 8px 12px;
+            margin: 6px 0; font-weight: 700;
+            display: none; align-items: center; flex-wrap: wrap;
+            font-size: 0.85rem;
+        }
+        .request-banner.show { display: flex; }
+        .request-banner > * { margin: 3px 4px; }
+        .request-banner .btn { padding: 4px 10px; font-size: 0.75rem; }
+
+        .modal-mask {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none; align-items: center; justify-content: center;
+            z-index: 100; padding: 16px;
+        }
+        .modal-mask.show { display: flex; }
+        .modal {
+            background: #f5e8d0; border-radius: 20px;
+            padding: 20px 22px; width: 320px; max-width: 100%;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+            text-align: center;
+        }
+        .modal h2 { margin: 0 0 14px; color: #3b2a1a; font-size: 1.2rem; }
+        .modal .tabs {
+            display: flex; margin-bottom: 14px;
+            border-radius: 30px; background: #d8c4a2; padding: 3px;
+        }
+        .modal .tabs button {
+            flex: 1; padding: 7px 0; border-radius: 30px; border: none;
+            background: transparent; font-weight: 700; color: #5c4b33;
+            cursor: pointer; font-size: 0.9rem; font-family: inherit;
+        }
+        .modal .tabs button.active { background: #e6b422; color: #2d1f0e; }
+        .modal .field { margin-bottom: 10px; text-align: left; }
+        .modal .field label {
+            display: block; font-size: 0.75rem; font-weight: 700;
+            color: #5c4b33; margin-bottom: 3px;
+        }
+        .modal .field input {
+            width: 100%; padding: 9px 12px; border-radius: 30px;
+            border: 2px solid #b39262; background: #fcf3e3;
+            font-weight: 600; color: #2d1f0e; outline: none;
+            font-size: 0.9rem; font-family: inherit;
+        }
+        .modal .btn-main {
+            width: 100%; margin-top: 4px; padding: 11px 0; font-size: 1rem;
+        }
+        .modal .msg-line {
+            min-height: 18px; font-size: 0.75rem; font-weight: 600;
+            margin-bottom: 6px; color: #a5584b;
+        }
+        .remember-row {
+            display: flex; align-items: center; margin-bottom: 8px; text-align: left;
+        }
+        .remember-row input[type="checkbox"] {
+            width: 16px; height: 16px; margin-right: 8px;
+        }
+        .remember-row label {
+            margin: 0; font-size: 0.8rem; color: #5c4b33;
+            font-weight: 600; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="modal-mask" id="authModal">
+    <div class="modal">
+        <h2>五子棋账号</h2>
+        <div class="tabs">
+            <button id="tabLogin" class="active" type="button">登录</button>
+            <button id="tabRegister" type="button">注册</button>
+            <button id="tabDelete" type="button">注销</button>
+        </div>
+        <div class="field">
+            <label>用户名</label>
+            <input type="text" id="authUsername" maxlength="16" placeholder="2-16个字符">
+        </div>
+        <div class="field">
+            <label>密码</label>
+            <input type="password" id="authPassword" maxlength="32" placeholder="至少4位">
+        </div>
+        <div class="field" id="confirmField" style="display:none;">
+            <label>确认密码</label>
+            <input type="password" id="authPassword2" maxlength="32" placeholder="再次输入密码">
+        </div>
+        <div class="remember-row" id="rememberRow">
+            <input type="checkbox" id="rememberMe" checked>
+            <label for="rememberMe">记住我（7天内自动登录）</label>
+        </div>
+        <div class="msg-line" id="authMsg"></div>
+        <button class="btn btn-main" id="authSubmitBtn" type="button">登录</button>
+    </div>
+</div>
+
+<div class="game-container">
+    <div class="title-bar">
+        <div class="title">
+            ⚫ 五子棋 · 多房间 ⚪
+            <span id="connStatus" class="conn-status conn-wait">连接中…</span>
+        </div>
+        <div class="auth-area">
+            <span id="currentUserLabel">未登录</span>
+            <button class="btn" id="openAuthBtn" type="button">登录/注册</button>
+            <button class="btn danger" id="logoutBtn" type="button" style="display:none;">登出</button>
+        </div>
+    </div>
+
+    <div class="ws-bar">
+        <label>🔌 WS</label>
+        <input type="text" id="wsUrlInput" placeholder="ws://192.168.1.10:8765" spellcheck="false" autocapitalize="off" autocorrect="off">
+        <button class="btn secondary small" id="applyWsBtn" type="button">连接</button>
+        <button class="btn secondary small" id="resetWsBtn" type="button">默认</button>
+    </div>
+
+    <div class="lobby-view active" id="lobbyView">
+        <div class="lobby">
+            <h3>🏠 大厅</h3>
+            <div class="lobby-row">
+                <span style="font-weight:700;color:#3b2a1a;">加入房间：</span>
+                <input type="text" id="roomIdInput" maxlength="4" placeholder="4位数字" inputmode="numeric">
+                <button class="btn" id="joinRoomBtn" type="button">加入</button>
+            </div>
+            <div class="lobby-row">
+                <button class="btn success" id="createRoomBtn" type="button">➕ 创建新房间</button>
+                <button class="btn secondary small" id="refreshRoomsBtn" type="button">🔄 刷新</button>
+            </div>
+            <div style="font-size:0.8rem;color:#7a5c33;margin-bottom:6px;font-weight:600;">
+                可用房间（未满）：
+            </div>
+            <div class="room-list" id="roomList">
+                <div class="empty-tip">暂无可用房间，点击「创建新房间」</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="room-view" id="roomView">
+        <div class="room-info">
+            <span class="room-id-badge" id="roomIdBadge">房间 -</span>
+            <div class="player-tag" id="blackPlayerTag">
+                <div class="black-dot"></div>
+                <span id="blackName">等待黑棋</span>
+                <span class="status-dot offline" id="blackStatus"></span>
+            </div>
+            <div class="turn-indicator" id="turnIndicator">⚫ 黑棋回合</div>
+            <div class="player-tag" id="whitePlayerTag">
+                <div class="white-dot"></div>
+                <span id="whiteName">等待白棋</span>
+                <span class="status-dot offline" id="whiteStatus"></span>
+            </div>
+            <button class="btn danger small" id="leaveRoomBtn" type="button">离开房间</button>
+        </div>
+
+        <div class="request-banner" id="requestBanner"></div>
+
+        <div class="board-wrapper" id="boardWrapper">
+            <canvas id="boardCanvas" width="600" height="600"></canvas>
+            <div class="game-result-banner" id="gameResultBanner"></div>
+        </div>
+
+        <div class="action-bar">
+            <button class="btn secondary small" id="requestRestartBtn" type="button">🔄 新一局</button>
+            <button class="btn secondary small" id="requestDrawBtn" type="button">🤝 和棋</button>
+            <span id="swapHint"></span>
+        </div>
+
+        <div class="footer">
+            <div class="msg" id="messageBox">已进入房间</div>
+            <div class="win-rate" id="winRateDisplay">胜率: --</div>
+        </div>
+
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-box">
+            <input type="text" id="chatInput" placeholder="输入聊天内容..." maxlength="200">
+            <button class="btn secondary small" id="sendChatBtn" type="button">发送</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        'use strict';
+
+        var BOARD_SIZE = 15;
+        var CELL_SIZE = 600 / BOARD_SIZE;
+        var RADIUS = CELL_SIZE * 0.4;
+        var DEFAULT_WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+                             (location.hostname || 'localhost') + ':8765';
+        var WS_URL_STORAGE_KEY = 'gomoku_ws_url_v2';
+        var COOKIE_NAME = 'gomoku_token';
+
+        var canvas = document.getElementById('boardCanvas');
+        var ctx = canvas.getContext('2d');
+        var blackNameSpan = document.getElementById('blackName');
+        var whiteNameSpan = document.getElementById('whiteName');
+        var blackStatus = document.getElementById('blackStatus');
+        var whiteStatus = document.getElementById('whiteStatus');
+        var blackPlayerTag = document.getElementById('blackPlayerTag');
+        var whitePlayerTag = document.getElementById('whitePlayerTag');
+        var turnIndicator = document.getElementById('turnIndicator');
+        var messageBox = document.getElementById('messageBox');
+        var winRateDisplay = document.getElementById('winRateDisplay');
+        var chatLog = document.getElementById('chatLog');
+        var chatInput = document.getElementById('chatInput');
+        var sendChatBtn = document.getElementById('sendChatBtn');
+        var connStatus = document.getElementById('connStatus');
+        var currentUserLabel = document.getElementById('currentUserLabel');
+        var openAuthBtn = document.getElementById('openAuthBtn');
+        var logoutBtn = document.getElementById('logoutBtn');
+        var wsUrlInput = document.getElementById('wsUrlInput');
+        var applyWsBtn = document.getElementById('applyWsBtn');
+        var resetWsBtn = document.getElementById('resetWsBtn');
+
+        var lobbyView = document.getElementById('lobbyView');
+        var roomView = document.getElementById('roomView');
+        var roomIdBadge = document.getElementById('roomIdBadge');
+        var roomIdInput = document.getElementById('roomIdInput');
+        var joinRoomBtn = document.getElementById('joinRoomBtn');
+        var createRoomBtn = document.getElementById('createRoomBtn');
+        var refreshRoomsBtn = document.getElementById('refreshRoomsBtn');
+        var roomList = document.getElementById('roomList');
+        var leaveRoomBtn = document.getElementById('leaveRoomBtn');
+        var requestRestartBtn = document.getElementById('requestRestartBtn');
+        var requestDrawBtn = document.getElementById('requestDrawBtn');
+        var requestBanner = document.getElementById('requestBanner');
+        var boardWrapper = document.getElementById('boardWrapper');
+        var gameResultBanner = document.getElementById('gameResultBanner');
+        var swapHint = document.getElementById('swapHint');
+
+        var authModal = document.getElementById('authModal');
+        var tabLogin = document.getElementById('tabLogin');
+        var tabRegister = document.getElementById('tabRegister');
+        var tabDelete = document.getElementById('tabDelete');
+        var authUsername = document.getElementById('authUsername');
+        var authPassword = document.getElementById('authPassword');
+        var authPassword2 = document.getElementById('authPassword2');
+        var confirmField = document.getElementById('confirmField');
+        var authMsg = document.getElementById('authMsg');
+        var authSubmitBtn = document.getElementById('authSubmitBtn');
+        var rememberRow = document.getElementById('rememberRow');
+        var rememberMe = document.getElementById('rememberMe');
+
+        var ws = null;
+        var currentWsUrl = DEFAULT_WS_URL;
+        var myUsername = null;
+        var myColor = null;
+        var currentRoomId = null;
+        var board = [];
+        for (var i = 0; i < BOARD_SIZE; i++) {
+            var row = [];
+            for (var j = 0; j < BOARD_SIZE; j++) row.push(0);
+            board.push(row);
+        }
+        var currentPlayer = 1;
+        var gameOver = false;
+        var winner = 0;
+        var blackPlayer = null;
+        var whitePlayer = null;
+        var winStats = {};
+        var restartRequest = null;
+        var drawRequest = null;
+        var swapOnRestart = false;   // ★
+        var connected = false;
+        var reconnectTimer = null;
+        var reconnectAttempts = 0;
+        var authMode = 'login';
+        var lastGameOverInfo = null;
+        var bannerTimer = null;
+
+        // ==================== Cookie ====================
+        function setCookie(name, value, maxAgeSeconds) {
+            var c = name + '=' + encodeURIComponent(value) + '; path=/; SameSite=Lax';
+            if (maxAgeSeconds > 0) c += '; max-age=' + maxAgeSeconds;
+            document.cookie = c;
+        }
+        function getCookie(name) {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var parts = cookies[i].trim().split('=');
+                if (parts[0] === name) return decodeURIComponent(parts[1] || '');
+            }
+            return null;
+        }
+        function deleteCookie(name) {
+            document.cookie = name + '=; path=/; max-age=0; SameSite=Lax';
+        }
+
+        // ==================== WS 地址 ====================
+        function loadSavedWsUrl() {
+            try {
+                var saved = localStorage.getItem(WS_URL_STORAGE_KEY);
+                if (saved) return saved;
+            } catch (e) {}
+            return DEFAULT_WS_URL;
+        }
+        function saveWsUrl(url) {
+            try { localStorage.setItem(WS_URL_STORAGE_KEY, url); } catch (e) {}
+        }
+        function isValidWsUrl(url) {
+            return /^wss?:\/\/.+/i.test(url);
+        }
+        function applyWsUrl() {
+            var url = wsUrlInput.value.trim();
+            if (!url) { setMessage('请输入 WebSocket 地址', true); return; }
+            if (!isValidWsUrl(url)) { setMessage('地址格式应为 ws:// 或 wss:// 开头', true); return; }
+            var oldUrl = currentWsUrl;
+            if (url !== oldUrl && getCookie(COOKIE_NAME)) {
+                if (!confirm('切换服务器后，之前的登录状态将失效，需要重新登录。是否继续？')) {
+                    wsUrlInput.value = oldUrl;
+                    return;
+                }
+                deleteCookie(COOKIE_NAME);
+            }
+            if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+            connected = false;
+            currentWsUrl = url;
+            saveWsUrl(url);
+            reconnectAttempts = 0;
+            setMessage('正在连接到 ' + url);
+            connect();
+        }
+
+        applyWsBtn.addEventListener('click', applyWsUrl);
+        resetWsBtn.addEventListener('click', function() {
+            wsUrlInput.value = DEFAULT_WS_URL;
+            applyWsUrl();
+        });
+        wsUrlInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') applyWsUrl();
+        });
+
+        // ==================== 登录弹窗 ====================
+        function openAuthModal(mode) {
+            authMode = mode || 'login';
+            authModal.classList.add('show');
+            updateAuthModalMode();
+            authMsg.textContent = '';
+            authUsername.value = '';
+            authPassword.value = '';
+            authPassword2.value = '';
+            setTimeout(function() { try { authUsername.focus(); } catch (e) {} }, 100);
+        }
+        function closeAuthModal() { authModal.classList.remove('show'); }
+        function updateAuthModalMode() {
+            tabLogin.classList.remove('active');
+            tabRegister.classList.remove('active');
+            tabDelete.classList.remove('active');
+            if (authMode === 'login') {
+                tabLogin.classList.add('active');
+                confirmField.style.display = 'none';
+                rememberRow.style.display = 'flex';
+                authSubmitBtn.textContent = '登录';
+            } else if (authMode === 'register') {
+                tabRegister.classList.add('active');
+                confirmField.style.display = 'block';
+                rememberRow.style.display = 'none';
+                authSubmitBtn.textContent = '注册';
+            } else {
+                tabDelete.classList.add('active');
+                confirmField.style.display = 'none';
+                rememberRow.style.display = 'none';
+                authSubmitBtn.textContent = '注销账号';
+            }
+        }
+        tabLogin.addEventListener('click', function() { authMode = 'login'; updateAuthModalMode(); authMsg.textContent = ''; });
+        tabRegister.addEventListener('click', function() { authMode = 'register'; updateAuthModalMode(); authMsg.textContent = ''; });
+        tabDelete.addEventListener('click', function() { authMode = 'delete'; updateAuthModalMode(); authMsg.textContent = ''; });
+        openAuthBtn.addEventListener('click', function() { openAuthModal('login'); });
+        authModal.addEventListener('click', function(e) {
+            if (e.target === authModal) closeAuthModal();
+        });
+        authSubmitBtn.addEventListener('click', submitAuth);
+        authUsername.addEventListener('keydown', function(e) { if (e.key === 'Enter') submitAuth(); });
+        authPassword.addEventListener('keydown', function(e) { if (e.key === 'Enter') submitAuth(); });
+        authPassword2.addEventListener('keydown', function(e) { if (e.key === 'Enter') submitAuth(); });
+
+        function submitAuth() {
+            var username = authUsername.value.trim();
+            var password = authPassword.value;
+            authMsg.textContent = '';
+            if (!username) { authMsg.textContent = '请输入用户名'; return; }
+            if (!password) { authMsg.textContent = '请输入密码'; return; }
+
+            if (authMode === 'register') {
+                if (password.length < 4) { authMsg.textContent = '密码至少4位'; return; }
+                if (password !== authPassword2.value) { authMsg.textContent = '两次密码不一致'; return; }
+                send({ type: 'register', username: username, password: password });
+            } else if (authMode === 'delete') {
+                if (!confirm('确定要注销账号「' + username + '」吗？此操作不可恢复！')) return;
+                send({ type: 'delete_account', password: password });
+            } else {
+                send({ type: 'login', username: username, password: password, remember: rememberMe.checked });
+            }
+        }
+
+        // ==================== WebSocket ====================
+        function setConnStatus(state, text) {
+            connStatus.className = 'conn-status ' + state;
+            connStatus.textContent = text;
+        }
+        function connect() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+            setConnStatus('conn-wait', '连接中…');
+            setMessage('正在连接 ' + currentWsUrl);
+            try { ws = new WebSocket(currentWsUrl); }
+            catch (e) {
+                setMessage('无法创建WebSocket: ' + e.message, true);
+                setConnStatus('conn-bad', '失败');
+                scheduleReconnect();
+                return;
+            }
+            ws.onopen = function() {
+                connected = true;
+                reconnectAttempts = 0;
+                setConnStatus('conn-ok', '已连接');
+                setMessage('已连接服务器');
+                var token = getCookie(COOKIE_NAME);
+                if (token) send({ type: 'auto_login', token: token });
+            };
+            ws.onmessage = function(event) {
+                try { handleServerMessage(JSON.parse(event.data)); }
+                catch (e) { console.error('解析失败', e); }
+            };
+            ws.onclose = function() {
+                connected = false;
+                setConnStatus('conn-bad', '已断开');
+                setMessage('连接断开，正在重连…', true);
+                myColor = null;
+                updateUI();
+                scheduleReconnect();
+            };
+            ws.onerror = function() {
+                setMessage('WebSocket 错误，请检查地址 ' + currentWsUrl, true);
+                setConnStatus('conn-bad', '错误');
+            };
+        }
+        function scheduleReconnect() {
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectAttempts++;
+            var delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts - 1), 10000);
+            reconnectTimer = setTimeout(connect, delay);
+        }
+        function send(obj) {
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+            else setMessage('未连接服务器', true);
+        }
+
+        // ==================== 消息处理 ====================
+        function handleServerMessage(msg) {
+            switch (msg.type) {
+                case 'hello': break;
+                case 'state': applyState(msg.data); break;
+                case 'room_list': renderRoomList(msg.data); break;
+
+                case 'joined_room':
+                    currentRoomId = msg.roomId;
+                    myUsername = msg.username;
+                    myColor = msg.color;
+                    lastGameOverInfo = null;
+                    applyState(msg.state);
+                    showRoomView();
+                    updateUI();
+                    appendChat('系统', '已加入房间 ' + msg.roomId);
+                    break;
+
+                case 'register_result':
+                    authMsg.textContent = msg.message;
+                    authMsg.style.color = msg.success ? '#2e7d32' : '#a5584b';
+                    if (msg.success) {
+                        authMode = 'login';
+                        updateAuthModalMode();
+                        authPassword.value = '';
+                        authPassword2.value = '';
+                        authMsg.textContent = '注册成功，请登录';
+                        authMsg.style.color = '#2e7d32';
+                    }
+                    break;
+
+                case 'login_result':
+                    if (msg.success) {
+                        myUsername = msg.username;
+                        if (msg.token) {
+                            if (msg.remember) setCookie(COOKIE_NAME, msg.token, 7 * 24 * 3600);
+                            else setCookie(COOKIE_NAME, msg.token, 0);
+                        }
+                        closeAuthModal();
+                        setMessage(msg.auto ? '欢迎回来，' + myUsername : '登录成功');
+                        send({ type: 'list_rooms' });
+                    } else {
+                        if (!msg.auto) {
+                            authMsg.textContent = msg.message;
+                            authMsg.style.color = '#a5584b';
+                        }
+                        if (msg.auto) deleteCookie(COOKIE_NAME);
+                    }
+                    updateUI();
+                    break;
+
+                case 'delete_account_result':
+                    if (msg.success) {
+                        deleteCookie(COOKIE_NAME);
+                        myUsername = null;
+                        myColor = null;
+                        closeAuthModal();
+                        showLobbyView();
+                        setMessage('账号已注销');
+                    } else {
+                        authMsg.textContent = msg.message;
+                        authMsg.style.color = '#a5584b';
+                    }
+                    updateUI();
+                    break;
+
+                case 'logout_done':
+                    myUsername = null;
+                    myColor = null;
+                    currentRoomId = null;
+                    lastGameOverInfo = null;
+                    deleteCookie(COOKIE_NAME);
+                    showLobbyView();
+                    setMessage('已登出');
+                    updateUI();
+                    break;
+
+                case 'kicked':
+                    setMessage(msg.message || '账号在别处登录，已断开', true);
+                    if (ws) { try { ws.close(); } catch (e) {} }
+                    myUsername = null;
+                    myColor = null;
+                    currentRoomId = null;
+                    lastGameOverInfo = null;
+                    deleteCookie(COOKIE_NAME);
+                    showLobbyView();
+                    updateUI();
+                    break;
+
+                case 'error':
+                    setMessage(msg.message, true);
+                    break;
+                case 'notice':
+                    setMessage(msg.message);
+                    appendChat('系统', msg.message);
+                    break;
+
+                case 'game_over':
+                    lastGameOverInfo = {
+                        winner: msg.winner,
+                        winnerName: msg.winnerName || null,
+                        draw: !!msg.draw,
+                        reason: msg.reason || null
+                    };
+                    updateGameOverVisual();
+                    // ★ 提示换边信息
+                    if (msg.draw) {
+                        setMessage('🤝 双方同意和棋，平局 · 下一局不换边');
+                    } else if (msg.reason) {
+                        setMessage('🏆 ' + (msg.winner === 1 ? '黑棋' : '白棋') + ' ' +
+                                   (msg.winnerName || '') + ' 获胜（' + msg.reason + '）' +
+                                   (msg.winner === 1 ? ' · 下一局换边' : ' · 下一局不换边'));
+                    } else if (msg.winner === 1) {
+                        setMessage('🏆 黑棋 ' + (msg.winnerName || '') + ' 获胜！ · 下一局换边');
+                    } else if (msg.winner === 2) {
+                        setMessage('🏆 白棋 ' + (msg.winnerName || '') + ' 获胜！ · 下一局不换边');
+                    } else {
+                        setMessage('平局！ · 下一局不换边');
+                    }
+                    break;
+
+                case 'chat':
+                    appendChat(msg.username || '游客', msg.text);
+                    break;
+            }
+        }
+
+        function applyState(data) {
+            if (data.roomId) {
+                currentRoomId = data.roomId;
+                roomIdBadge.textContent = '房间 ' + data.roomId;
+            }
+            board = data.board || board;
+            currentPlayer = data.currentPlayer;
+            gameOver = data.gameOver;
+            winner = data.winner;
+            blackPlayer = data.blackPlayer;
+            whitePlayer = data.whitePlayer;
+            winStats = data.winStats || {};
+            restartRequest = data.restartRequest || null;
+            drawRequest = data.drawRequest || null;
+            swapOnRestart = data.swapOnRestart || false;   // ★
+
+            if (!gameOver) {
+                lastGameOverInfo = null;
+            } else if (lastGameOverInfo === null) {
+                lastGameOverInfo = {
+                    winner: winner,
+                    winnerName: (winner === 1 ? blackPlayer : (winner === 2 ? whitePlayer : null)),
+                    draw: (winner === 0),
+                    reason: null
+                };
+            }
+
+            if (myUsername) {
+                if (blackPlayer === myUsername) myColor = 1;
+                else if (whitePlayer === myUsername) myColor = 2;
+                else myColor = null;
+            }
+            updateUI();
+            drawBoard();
+            updateRequestBanner();
+            updateSwapHint();
+        }
+
+        function renderRoomList(list) {
+            roomList.innerHTML = '';
+            if (!list || list.length === 0) {
+                var tip = document.createElement('div');
+                tip.className = 'empty-tip';
+                tip.textContent = '暂无可用房间，点击「创建新房间」';
+                roomList.appendChild(tip);
+                return;
+            }
+            for (var i = 0; i < list.length; i++) {
+                var r = list[i];
+                var item = document.createElement('div');
+                item.className = 'room-item';
+                var idSpan = document.createElement('span');
+                idSpan.className = 'room-id';
+                idSpan.textContent = r.roomId;
+                var infoSpan = document.createElement('span');
+                infoSpan.style.fontSize = '0.75rem';
+                infoSpan.textContent = (r.black || '?') + ' vs ' + (r.white || '?') + ' (' + r.players + '/2)';
+                var joinBtn = document.createElement('button');
+                joinBtn.className = 'btn small';
+                joinBtn.textContent = '加入';
+                joinBtn.setAttribute('type', 'button');
+                (function(rid) {
+                    joinBtn.addEventListener('click', function() {
+                        if (!myUsername) { setMessage('请先登录', true); openAuthModal('login'); return; }
+                        send({ type: 'join_room', roomId: rid });
+                    });
+                })(r.roomId);
+                item.appendChild(idSpan);
+                item.appendChild(infoSpan);
+                item.appendChild(joinBtn);
+                roomList.appendChild(item);
+            }
+        }
+
+        function showLobbyView() {
+            lobbyView.classList.add('active');
+            roomView.classList.remove('active');
+            currentRoomId = null;
+            myColor = null;
+            lastGameOverInfo = null;
+            board = [];
+            for (var i = 0; i < BOARD_SIZE; i++) {
+                var row = [];
+                for (var j = 0; j < BOARD_SIZE; j++) row.push(0);
+                board.push(row);
+            }
+            drawBoard();
+            hideGameResultBanner();
+            if (myUsername) send({ type: 'list_rooms' });
+        }
+        function showRoomView() {
+            lobbyView.classList.remove('active');
+            roomView.classList.add('active');
+        }
+
+        // ==================== ★ 胜负可视化 ====================
+        function hideBannerOnly() {
+            if (bannerTimer) {
+                clearTimeout(bannerTimer);
+                bannerTimer = null;
+            }
+            gameResultBanner.classList.remove('show');
+            setTimeout(function() {
+                if (!gameResultBanner.classList.contains('show')) {
+                    gameResultBanner.innerHTML = '';
+                }
+            }, 400);
+        }
+
+        function hideGameResultBanner() {
+            if (bannerTimer) {
+                clearTimeout(bannerTimer);
+                bannerTimer = null;
+            }
+            gameResultBanner.classList.remove('show', 'lose', 'draw');
+            gameResultBanner.innerHTML = '';
+            boardWrapper.classList.remove('win-glow', 'lose-glow', 'draw-glow');
+            turnIndicator.classList.remove('win', 'lose', 'draw');
+            blackPlayerTag.classList.remove('winner', 'loser');
+            whitePlayerTag.classList.remove('winner', 'loser');
+        }
+
+        function updateGameOverVisual() {
+            hideGameResultBanner();
+            if (!lastGameOverInfo || !gameOver) return;
+
+            var info = lastGameOverInfo;
+            var bannerText = '';
+            var bannerSub = '';
+            var isDraw = info.draw || info.winner === 0;
+            var iWon = false;
+            var iLost = false;
+
+            if (isDraw) {
+                bannerText = '🤝 平 局';
+                bannerSub = '双方同意和棋';
+                gameResultBanner.className = 'game-result-banner draw';
+                boardWrapper.classList.add('draw-glow');
+                turnIndicator.classList.add('draw');
+            } else {
+                var winColor = info.winner;
+                var winName = info.winnerName || (winColor === 1 ? blackPlayer : whitePlayer);
+                var winIsBlack = (winColor === 1);
+
+                if (myColor !== null) {
+                    iWon = (myColor === winColor);
+                    iLost = !iWon;
+                }
+
+                if (iWon) {
+                    bannerText = '🏆 你 赢 了！';
+                    bannerSub = (winIsBlack ? '黑棋' : '白棋') + ' ' + (winName || '') + ' 获胜';
+                    gameResultBanner.className = 'game-result-banner';
+                    boardWrapper.classList.add('win-glow');
+                    turnIndicator.classList.add('win');
+                } else if (iLost) {
+                    bannerText = '💔 你 输 了';
+                    bannerSub = (winIsBlack ? '黑棋' : '白棋') + ' ' + (winName || '') + ' 获胜';
+                    gameResultBanner.className = 'game-result-banner lose';
+                    boardWrapper.classList.add('lose-glow');
+                    turnIndicator.classList.add('lose');
+                } else {
+                    bannerText = (winIsBlack ? '⚫ 黑棋' : '⚪ 白棋') + ' 获胜';
+                    bannerSub = (winName || '');
+                    gameResultBanner.className = 'game-result-banner';
+                    boardWrapper.classList.add('win-glow');
+                    turnIndicator.classList.add('win');
+                }
+
+                if (info.reason) bannerSub += ' · ' + info.reason;
+
+                if (winIsBlack) {
+                    blackPlayerTag.classList.add('winner');
+                    whitePlayerTag.classList.add('loser');
+                } else {
+                    whitePlayerTag.classList.add('winner');
+                    blackPlayerTag.classList.add('loser');
+                }
+            }
+
+            gameResultBanner.innerHTML = bannerText +
+                (bannerSub ? '<span class="sub">' + bannerSub + '</span>' : '');
+            gameResultBanner.classList.add('show');
+
+            if (bannerTimer) clearTimeout(bannerTimer);
+            bannerTimer = setTimeout(function() {
+                hideBannerOnly();
+            }, 5000);
+        }
+
+        // ★ 换边提示
+        function updateSwapHint() {
+            if (!swapHint) return;
+            if (gameOver && swapOnRestart) {
+                swapHint.textContent = '♻ 下一局将交换黑白';
+                swapHint.classList.add('show');
+            } else if (gameOver && !swapOnRestart) {
+                swapHint.textContent = '下一局保持黑白';
+                swapHint.classList.add('show');
+            } else {
+                swapHint.classList.remove('show');
+                swapHint.textContent = '';
+            }
+        }
+
+        // ==================== UI 更新 ====================
+        function updateUI() {
+            blackNameSpan.textContent = blackPlayer || '等待黑棋';
+            whiteNameSpan.textContent = whitePlayer || '等待白棋';
+            blackStatus.className = 'status-dot ' + (blackPlayer ? 'online' : 'offline');
+            whiteStatus.className = 'status-dot ' + (whitePlayer ? 'online' : 'offline');
+
+            turnIndicator.classList.remove('win', 'lose', 'draw');
+            blackPlayerTag.classList.remove('winner', 'loser');
+            whitePlayerTag.classList.remove('winner', 'loser');
+
+            if (gameOver) {
+                if (lastGameOverInfo) {
+                    updateGameOverVisual();
+                } else {
+                    if (winner === 1) {
+                        turnIndicator.textContent = '🏆 黑棋 ' + (blackPlayer || '') + ' 获胜';
+                    } else if (winner === 2) {
+                        turnIndicator.textContent = '🏆 白棋 ' + (whitePlayer || '') + ' 获胜';
+                    } else {
+                        turnIndicator.textContent = '🤝 平局';
+                    }
+                }
+            } else {
+                turnIndicator.textContent = currentPlayer === 1 ? '⚫ 黑棋回合' : '⚪ 白棋回合';
+                hideGameResultBanner();
+            }
+
+            if (myUsername) {
+                currentUserLabel.textContent = myUsername + '（' + (myColor === 1 ? '黑棋' : myColor === 2 ? '白棋' : '大厅') + '）';
+                openAuthBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+            } else {
+                currentUserLabel.textContent = '未登录';
+                openAuthBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+            }
+
+            if (myUsername && winStats[myUsername]) {
+                var s = winStats[myUsername];
+                var total = s.wins + s.losses;
+                var rate = total > 0 ? Math.round((s.wins / total) * 100) : 0;
+                winRateDisplay.textContent = '胜率: ' + rate + '% (' + s.wins + '胜 ' + s.losses + '负)';
+            } else if (myUsername) {
+                winRateDisplay.textContent = '胜率: 0% (0胜 0负)';
+            } else {
+                winRateDisplay.textContent = '胜率: --';
+            }
+
+            if (!myUsername || myColor === null || gameOver || myColor !== currentPlayer) {
+                canvas.style.cursor = 'not-allowed';
+            } else {
+                canvas.style.cursor = 'pointer';
+            }
+
+            if (myColor === null || !gameOver) {
+                requestRestartBtn.disabled = true;
+            } else {
+                requestRestartBtn.disabled = !!restartRequest;
+            }
+            if (myColor === null || gameOver) {
+                requestDrawBtn.disabled = true;
+            } else {
+                requestDrawBtn.disabled = !!drawRequest;
+            }
+            updateSwapHint();
+        }
+
+        function updateRequestBanner() {
+            requestBanner.innerHTML = '';
+            var show = false;
+            if (restartRequest && restartRequest.from && restartRequest.from !== myUsername) {
+                show = true;
+                var s1 = document.createElement('span');
+                s1.textContent = restartRequest.from + ' 申请开始新一局 ';
+                var accept = document.createElement('button');
+                accept.className = 'btn success';
+                accept.textContent = '同意';
+                accept.setAttribute('type', 'button');
+                accept.addEventListener('click', function() { send({ type: 'accept_restart' }); });
+                var reject = document.createElement('button');
+                reject.className = 'btn danger';
+                reject.textContent = '拒绝';
+                reject.setAttribute('type', 'button');
+                reject.addEventListener('click', function() { send({ type: 'reject_restart' }); });
+                requestBanner.appendChild(s1);
+                requestBanner.appendChild(accept);
+                requestBanner.appendChild(reject);
+            }
+            if (drawRequest && drawRequest.from && drawRequest.from !== myUsername) {
+                show = true;
+                var s2 = document.createElement('span');
+                s2.textContent = drawRequest.from + ' 申请和棋 ';
+                var accept2 = document.createElement('button');
+                accept2.className = 'btn success';
+                accept2.textContent = '同意';
+                accept2.setAttribute('type', 'button');
+                accept2.addEventListener('click', function() { send({ type: 'accept_draw' }); });
+                var reject2 = document.createElement('button');
+                reject2.className = 'btn danger';
+                reject2.textContent = '拒绝';
+                reject2.setAttribute('type', 'button');
+                reject2.addEventListener('click', function() { send({ type: 'reject_draw' }); });
+                requestBanner.appendChild(s2);
+                requestBanner.appendChild(accept2);
+                requestBanner.appendChild(reject2);
+            }
+            if (show) requestBanner.classList.add('show');
+            else requestBanner.classList.remove('show');
+        }
+
+        function setMessage(text, isError) {
+            messageBox.textContent = text;
+            messageBox.style.color = isError ? '#ffb0a0' : '#ffdfa7';
+        }
+        function appendChat(name, text) {
+            var div = document.createElement('div');
+            var nameSpan = document.createElement('span');
+            nameSpan.className = 'name';
+            nameSpan.textContent = name + ':';
+            div.appendChild(nameSpan);
+            div.appendChild(document.createTextNode(' ' + text));
+            chatLog.appendChild(div);
+            chatLog.scrollTop = chatLog.scrollHeight;
+            while (chatLog.children.length > 50) chatLog.removeChild(chatLog.firstChild);
+        }
+
+        function drawBoard() {
+            ctx.clearRect(0, 0, 600, 600);
+            var gradient = ctx.createLinearGradient(0, 0, 600, 600);
+            gradient.addColorStop(0, '#e8d5b5');
+            gradient.addColorStop(0.5, '#dac29b');
+            gradient.addColorStop(1, '#c8b28b');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 600, 600);
+            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = '#5f4a2e';
+            ctx.shadowColor = '#bba77b';
+            ctx.shadowBlur = 4;
+            var offset = CELL_SIZE / 2;
+            for (var i = 0; i < BOARD_SIZE; i++) {
+                var pos = offset + i * CELL_SIZE;
+                ctx.beginPath(); ctx.moveTo(offset, pos); ctx.lineTo(600 - offset, pos); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(pos, offset); ctx.lineTo(pos, 600 - offset); ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
+            var starPoints = [3, 7, 11];
+            ctx.fillStyle = '#5f4a2e';
+            for (var a = 0; a < starPoints.length; a++) {
+                for (var b = 0; b < starPoints.length; b++) {
+                    var r = starPoints[a], c = starPoints[b];
+                    if ((r===3&&c===3)||(r===3&&c===11)||(r===7&&c===7)||(r===11&&c===3)||(r===11&&c===11)) {
+                        ctx.beginPath();
+                        ctx.arc(offset + c * CELL_SIZE, offset + r * CELL_SIZE, 5, 0, 2*Math.PI);
+                        ctx.fill();
+                    }
+                }
+            }
+            for (var row = 0; row < BOARD_SIZE; row++) {
+                for (var col = 0; col < BOARD_SIZE; col++) {
+                    var val = board[row][col];
+                    if (val === 0) continue;
+                    var x = offset + col * CELL_SIZE;
+                    var y = offset + row * CELL_SIZE;
+                    ctx.shadowColor = '#00000066'; ctx.shadowBlur = 10;
+                    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+                    var grad = ctx.createRadialGradient(x - 5, y - 5, 5, x, y, RADIUS * 1.4);
+                    if (val === 1) {
+                        grad.addColorStop(0, '#2a2a2a'); grad.addColorStop(0.7, '#111'); grad.addColorStop(1, '#000');
+                    } else {
+                        grad.addColorStop(0, '#fff'); grad.addColorStop(0.6, '#f0f0f0'); grad.addColorStop(1, '#c0c0c0');
+                    }
+                    ctx.beginPath(); ctx.arc(x, y, RADIUS, 0, 2*Math.PI);
+                    ctx.fillStyle = grad; ctx.fill();
+                    ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+                    ctx.beginPath(); ctx.arc(x - 3, y - 3, RADIUS * 0.2, 0, 2*Math.PI);
+                    ctx.fillStyle = val === 1 ? '#777' : '#fff'; ctx.fill();
+                    ctx.strokeStyle = val === 1 ? '#333' : '#aaa'; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.arc(x, y, RADIUS, 0, 2*Math.PI); ctx.stroke();
+                }
+            }
+            ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+        }
+
+        function handleCanvasClick(clientX, clientY) {
+            if (!connected) { setMessage('未连接服务器', true); return; }
+            if (!currentRoomId) { setMessage('请先加入房间', true); return; }
+            if (gameOver) { setMessage('游戏已结束，点击「新一局」', true); return; }
+            if (!myUsername) { setMessage('请先登录', true); openAuthModal('login'); return; }
+            if (myColor === null) { setMessage('旁观者无法下棋', true); return; }
+            if (myColor !== currentPlayer) { setMessage('还没轮到你', true); return; }
+
+            var rect = canvas.getBoundingClientRect();
+            var mouseX = (clientX - rect.left) * (canvas.width / rect.width);
+            var mouseY = (clientY - rect.top) * (canvas.height / rect.height);
+            var offset = CELL_SIZE / 2;
+            var col = Math.round((mouseX - offset) / CELL_SIZE);
+            var row = Math.round((mouseY - offset) / CELL_SIZE);
+            if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+                send({ type: 'move', row: row, col: col });
+            }
+        }
+        canvas.addEventListener('click', function(e) {
+            handleCanvasClick(e.clientX, e.clientY);
+        });
+        canvas.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            var touch = e.changedTouches[0];
+            if (touch) handleCanvasClick(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        joinRoomBtn.addEventListener('click', function() {
+            if (!myUsername) { setMessage('请先登录', true); openAuthModal('login'); return; }
+            var rid = roomIdInput.value.trim();
+            if (!/^\d{4}$/.test(rid)) { setMessage('房间号必须是4位数字', true); return; }
+            send({ type: 'join_room', roomId: rid });
+        });
+        createRoomBtn.addEventListener('click', function() {
+            if (!myUsername) { setMessage('请先登录', true); openAuthModal('login'); return; }
+            send({ type: 'create_room' });
+        });
+        refreshRoomsBtn.addEventListener('click', function() {
+            if (myUsername) send({ type: 'list_rooms' });
+        });
+        leaveRoomBtn.addEventListener('click', function() {
+            send({ type: 'leave_room' });
+            showLobbyView();
+        });
+        requestRestartBtn.addEventListener('click', function() {
+            send({ type: 'request_restart' });
+        });
+        requestDrawBtn.addEventListener('click', function() {
+            send({ type: 'request_draw' });
+        });
+        logoutBtn.addEventListener('click', function() {
+            if (currentRoomId) send({ type: 'leave_room' });
+            send({ type: 'logout' });
+            showLobbyView();
+        });
+
+        sendChatBtn.addEventListener('click', sendChat);
+        chatInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') sendChat(); });
+        function sendChat() {
+            var text = chatInput.value.trim();
+            if (!text) return;
+            if (!connected) { setMessage('未连接服务器', true); return; }
+            if (!myUsername) { setMessage('请先登录', true); openAuthModal('login'); return; }
+            if (!currentRoomId) { setMessage('请先加入房间', true); return; }
+            send({ type: 'chat', text: text });
+            chatInput.value = '';
+        }
+
+        function initWsUrlInput() {
+            var saved = loadSavedWsUrl();
+            wsUrlInput.value = saved;
+            currentWsUrl = saved;
+        }
+        initWsUrlInput();
+        drawBoard();
+        updateUI();
+        connect();
+
+        window.addEventListener('pagehide', function() { if (ws) try { ws.close(); } catch (e) {} });
+    })();
+</script>
+</body>
+</html>
